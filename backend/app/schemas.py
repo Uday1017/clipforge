@@ -17,7 +17,8 @@ class VideoChapter(BaseModel):
     end_time: float = Field(..., description="End time of the chapter in seconds")
     title: str = Field(..., description="Title of the chapter")
     summary: str = Field(..., description="Brief summary of the chapter content")
-    keywords: List[str] = Field(default_factory=list, description="Keywords or tags relevant to the chapter")
+    tags: List[str] = Field(default_factory=list, description="Relevant tags or keywords for the chapter")
+
 
 class ChapterGenerationResponse(BaseModel):
     """

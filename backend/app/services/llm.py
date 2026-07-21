@@ -37,13 +37,20 @@ def _generate_fallback_chapters(transcript: List[TranscriptSegment], video_id: s
         if len(summary_text) > 150:
             summary_text = summary_text[:147] + "..."
             
+        if i == 0:
+            title = "Introduction: Opening Hook"
+        elif i == num_chapters - 1:
+            title = "Conclusion: Closing Remarks"
+        else:
+            title = f"Key Insight: Section {i+1}"
+            
         chapters.append(
             VideoChapter(
                 start_time=round(start, 2),
                 end_time=round(end, 2),
-                title=f"Chapter {i+1}: Segment Overview",
+                title=title,
                 summary=summary_text or "Discussion of video content.",
-                keywords=["video", f"part-{i+1}", "overview"]
+                tags=["video", f"part-{i+1}", "overview"]
             )
         )
         
@@ -61,7 +68,6 @@ def _generate_via_gemini(transcript_text: str, video_id: str, total_duration: fl
     from google.genai import types
     
     logger.info("Attempting chapter generation via Gemini API...")
-    # Initialize the Gemini Client
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
     
     prompt = f"""
@@ -76,11 +82,16 @@ def _generate_via_gemini(transcript_text: str, video_id: str, total_duration: fl
         contents=prompt,
         config=types.GenerateContentConfig(
             system_instruction=(
-                "You are an expert video editor and content producer. "
-                "Analyze topic shifts across the transcript timestamps. "
-                "Divide the video logically into 3 to 7 distinct chapters depending on the total duration. "
-                "For each chapter, provide: a concise, professional title, a 2-sentence summary, "
-                "and 3-5 relevant keywords. Ensure start_time and end_time match the original transcript seconds."
+                "You are an expert video editor. Analyze topic shifts across the transcript timestamps. "
+                "Divide the video logically into distinct chapters. For short videos, create chapters "
+                "every 15 to 30 seconds for a highly granular, interactive navigation experience. "
+                "For the first chapter (starting near 0.0s), the title MUST include the word 'Introduction' or 'Opening Hook'. "
+                "For the last chapter, the title MUST include the word 'Conclusion' or 'Closing Remarks'. "
+                "Strictly forbid generic titles like 'Chapter 1', 'Segment Overview', 'Part 1', or repetitive tags. "
+                "Titles must be highly engaging, explicit, and descriptive (max 6 words), describing exactly what is discussed "
+                "(e.g., 'Introduction: Greeting the Audience', 'Core Argument: Why 18-Minute Talks Fail', 'Summary & Final Remarks'). "
+                "Provide a 1-2 sentence concise summary and 3-5 tags (keywords) for each chapter. "
+                "Ensure start_time and end_time match the original transcript seconds exactly."
             ),
             response_mime_type="application/json",
             response_schema=ChapterGenerationResponse,
@@ -113,9 +124,9 @@ async def _generate_via_groq(transcript_text: str, video_id: str, total_duration
             {{
                 "start_time": float,
                 "end_time": float,
-                "title": "string",
-                "summary": "string (exactly 2 sentences)",
-                "keywords": ["string"]
+                "title": "string (max 6 words, highly descriptive)",
+                "summary": "string (1-2 concise sentences)",
+                "tags": ["string"]
             }}
         ]
     }}
@@ -126,11 +137,16 @@ async def _generate_via_groq(transcript_text: str, video_id: str, total_duration
             {
                 "role": "system",
                 "content": (
-                    "You are an expert video editor and content producer. "
-                    "Analyze topic shifts across the transcript timestamps. "
-                    "Divide the video logically into 3 to 7 distinct chapters depending on total length. "
-                    "Provide a concise, professional title, a 2-sentence summary, and 3-5 relevant keywords for each chapter. "
-                    "Ensure start_time and end_time match the original transcript seconds accurately. "
+                    "You are an expert video editor. Analyze topic shifts across the transcript timestamps. "
+                    "Divide the video logically into distinct chapters. For short videos, create chapters "
+                    "every 15 to 30 seconds for a highly granular, interactive navigation experience. "
+                    "For the first chapter (starting near 0.0s), the title MUST include the word 'Introduction' or 'Opening Hook'. "
+                    "For the last chapter, the title MUST include the word 'Conclusion' or 'Closing Remarks'. "
+                    "Strictly forbid generic titles like 'Chapter 1', 'Segment Overview', 'Part 1', or repetitive tags. "
+                    "Titles must be highly engaging, explicit, and descriptive (max 6 words), describing exactly what is discussed "
+                    "(e.g., 'Introduction: Greeting the Audience', 'Core Argument: Why 18-Minute Talks Fail', 'Summary & Final Remarks'). "
+                    "Provide a 1-2 sentence concise summary and 3-5 tags (keywords) for each chapter. "
+                    "Ensure start_time and end_time match the original transcript seconds exactly. "
                     "Output ONLY valid JSON matching the requested schema."
                 ),
             },

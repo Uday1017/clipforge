@@ -2,6 +2,7 @@ import os
 import sys
 import uuid
 import shutil
+import asyncio
 import logging
 from typing import Dict
 
@@ -43,7 +44,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Ensure the upload directory exists
+# Ensure the upload directory exists at startup
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 
 # Serve uploaded videos and artifacts statically
@@ -61,7 +62,20 @@ async def run_pipeline_task(job_id: str, video_path: str, audio_path: str):
         # Step 1: Extract audio track
         jobs_db[job_id].progress_percentage = 25
         logger.info(f"Job {job_id} [25%]: Extracting audio from video...")
-        extract_audio_from_video(video_path, audio_path)
+        
+        try:
+            extract_audio_from_video(video_path, audio_path)
+        except FileNotFoundError as fnf:
+            error_msg = f"Audio extraction failed. Input video file not found or path is invalid: {video_path}. Error: {fnf}"
+            logger.error(error_msg)
+            raise RuntimeError(error_msg) from fnf
+        except Exception as err:
+            error_msg = (
+                f"Audio extraction failed. Ensure FFmpeg is installed and accessible in the system PATH, "
+                f"and that the video file is not corrupt. Error details: {err}"
+            )
+            logger.error(error_msg)
+            raise RuntimeError(error_msg) from err
 
         # Step 2: Perform Whisper speech transcription
         jobs_db[job_id].progress_percentage = 50
@@ -93,6 +107,13 @@ async def run_pipeline_task(job_id: str, video_path: str, audio_path: str):
             except Exception as err:
                 logger.warning(f"Failed to delete temporary audio {audio_path}: {err}")
 
+def save_upload_file_sync(upload_file: UploadFile, destination: str):
+    """
+    Synchronously write the uploaded file stream to the destination disk path.
+    """
+    with open(destination, "wb") as buffer:
+        shutil.copyfileobj(upload_file.file, buffer)
+
 @app.post("/api/process-video", response_model=JobStatusResponse)
 async def process_video(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """
@@ -107,17 +128,21 @@ async def process_video(background_tasks: BackgroundTasks, file: UploadFile = Fi
     if not ext:
         ext = ".mp4"
     video_filename = f"{job_id}{ext}"
+    
+    # Force creation of UPLOAD_DIR to resolve potential upload failure due to directory missing
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    
     video_path = os.path.join(settings.UPLOAD_DIR, video_filename)
     audio_path = os.path.join(settings.UPLOAD_DIR, f"{job_id}.mp3")
 
-    # Save uploaded file chunk by chunk to prevent loading large videos into memory
+    # Save uploaded file asynchronously in a separate thread pool to prevent blocking the event loop
     try:
-        with open(video_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        logger.info(f"Video file saved at: {video_path}")
+        logger.info(f"Saving uploaded video file stream asynchronously to: {video_path}")
+        await asyncio.to_thread(save_upload_file_sync, file, video_path)
+        logger.info(f"Video file successfully saved at: {video_path}")
     except Exception as e:
-        logger.error(f"Failed to write uploaded video file: {str(e)}")
-        raise HTTPException(status_code=500, detail="Could not save uploaded video file.")
+        logger.error(f"Failed to write uploaded video file stream: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Could not save uploaded video file: {str(e)}")
 
     # Initialize job in DB
     job_status = JobStatusResponse(
