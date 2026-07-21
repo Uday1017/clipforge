@@ -1,14 +1,22 @@
 import asyncio
+import os
+import sys
 import time
 import logging
-from typing import List
+from typing import List, Optional
+
+# Add backend directory to sys.path to ensure 'app' imports work regardless of run context
+backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+
 from faster_whisper import WhisperModel
 from app.schemas import TranscriptSegment
 
 logger = logging.getLogger(__name__)
 
 # Global singleton cache for the Whisper model
-_whisper_model: WhisperModel = None
+_whisper_model: Optional[WhisperModel] = None
 
 def get_whisper_model() -> WhisperModel:
     """
@@ -21,7 +29,10 @@ def get_whisper_model() -> WhisperModel:
         # Initialize the model on CPU with int8 quantization for speed and low memory footprint
         _whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
         logger.info("Whisper model loaded successfully.")
+    assert _whisper_model is not None, "Whisper model failed to initialize"
     return _whisper_model
+
+
 
 def _run_transcription_sync(audio_path: str) -> List[TranscriptSegment]:
     """
