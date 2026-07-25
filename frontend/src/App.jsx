@@ -73,6 +73,7 @@ function App() {
   // Interactive Summary Q&A Filter State
   const [selectedTag, setSelectedTag] = useState(null);
   const [activeQuestionId, setActiveQuestionId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -252,6 +253,80 @@ function App() {
     setShowExportMenu(false);
   };
 
+  const highlightText = (text, highlight) => {
+    if (!highlight.trim()) return text;
+    const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
+    return (
+      <span>
+        {parts.map((part, i) => 
+          part.toLowerCase() === highlight.toLowerCase()
+            ? <mark key={i} style={{background: 'yellow', color: 'black', padding: '1px', borderRadius: '2px'}}>{part}</mark>
+            : part
+        )}
+      </span>
+    );
+  };
+
+  const generatePdfReport = () => {
+    if (!result) return;
+    const printWindow = window.open('', '_blank');
+    const chaptersHtml = result.chapters.map((ch, idx) => `
+      <table width="100%" cellpadding="5" style="border: 1px solid #e2e8f0; margin: 10px 0; background: #ffffff;">
+        <tr>
+          <td style="font: bold 12px Arial; color: #4f46e5;">Chapter ${idx + 1}: ${ch.title}</td>
+          <td align="right" style="font: bold 12px Arial; color: #4f46e5;">${formatTime(ch.start_time)} - ${formatTime(ch.end_time)}</td>
+        </tr>
+        <tr>
+          <td colspan="2" style="font: 12px Arial; color: #4a5568;">${ch.summary}</td>
+        </tr>
+        <tr>
+          <td colspan="2" style="font: 10px Arial; color: #718096;">Tags: ${ch.tags ? ch.tags.join(', ') : 'none'}</td>
+        </tr>
+      </table>
+    `).join('');
+
+    const transcriptHtml = result.transcript ? result.transcript.map(seg => `
+      <p style="margin: 6px 0;">
+        <span style="color: #4f46e5; font: bold 12px Arial;">[${formatTime(seg.start)}]</span> &nbsp; ${seg.text}
+      </p>
+    `).join('') : '<p>No transcript available.</p>';
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>ClipForge Report - ${result.video_id}</title>
+          <style>
+            body { font: 14px Arial, Helvetica; color: #1a202c; padding: 40px; }
+            h1 { color: #4f46e5; }
+            h2 { color: #2d3748; border: 1px solid #4f46e5; padding: 6px; }
+            .summary { background: #f7fafc; padding: 15px; border: 1px solid #4f46e5; }
+          </style>
+        </head>
+        <body>
+          <h1>ClipForge AI Video Report</h1>
+          <div style="color: #718096; font: 12px Arial; margin: 10px 0 20px 0;">Video ID: ${result.video_id} | Total Duration: ${formatTime(result.total_duration)}</div>
+          
+          <h2>AI Summary</h2>
+          <div class="summary">${result.video_summary || 'No summary available.'}</div>
+          
+          <h2>Video Chapters</h2>
+          <div>${chaptersHtml}</div>
+          
+          <h2>Transcript</h2>
+          <div>${transcriptHtml}</div>
+          
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   // Drag-and-drop event handlers
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -405,6 +480,7 @@ function App() {
     setSelectedTag(null);
     setActiveQuestionId(null);
     setShowExportMenu(false);
+    setSearchTerm('');
   };
 
   return (
@@ -861,9 +937,7 @@ function App() {
                           </div>
                         )}
                       </div>
-                    )}
-
-                    {/* 2. TRANSCRIPT TAB */}
+                    )}                    {/* 2. TRANSCRIPT TAB */}
                     {activeTab === 'transcript' && (
                       <div className="flex flex-col gap-3">
                         <div className="flex justify-between items-center px-1 relative shrink-0">
@@ -885,25 +959,25 @@ function App() {
                               <div className="absolute right-0 mt-1.5 w-44 bg-slate-900 border border-slate-800 rounded-xl shadow-xl z-50 overflow-hidden flex flex-col py-1">
                                 <button
                                   onClick={exportToYoutube}
-                                  className="w-full px-3 py-2 text-left text-xs text-slate-300 hover:bg-indigo-600 hover:text-white transition-colors"
+                                  className="w-full px-3 py-2 text-left text-xs text-slate-350 hover:bg-indigo-600 hover:text-white transition-colors"
                                 >
                                   YouTube Chapters (.txt)
                                 </button>
                                 <button
                                   onClick={exportToSrt}
-                                  className="w-full px-3 py-2 text-left text-xs text-slate-300 hover:bg-indigo-600 hover:text-white transition-colors"
+                                  className="w-full px-3 py-2 text-left text-xs text-slate-355 hover:bg-indigo-600 hover:text-white transition-colors"
                                 >
                                   SRT Subtitles (.srt)
                                 </button>
                                 <button
                                   onClick={exportToVtt}
-                                  className="w-full px-3 py-2 text-left text-xs text-slate-300 hover:bg-indigo-600 hover:text-white transition-colors"
+                                  className="w-full px-3 py-2 text-left text-xs text-slate-355 hover:bg-indigo-600 hover:text-white transition-colors"
                                 >
                                   WebVTT Subtitles (.vtt)
                                 </button>
                                 <button
                                   onClick={exportToXml}
-                                  className="w-full px-3 py-2 text-left text-xs text-slate-300 hover:bg-indigo-600 hover:text-white transition-colors"
+                                  className="w-full px-3 py-2 text-left text-xs text-slate-355 hover:bg-indigo-600 hover:text-white transition-colors"
                                 >
                                   Video CMS Metadata (.xml)
                                 </button>
@@ -912,79 +986,115 @@ function App() {
                           </div>
                         </div>
 
+                        {/* Search Input (No hyphens in style) */}
+                        <div style={{ padding: '0 4px' }}>
+                          <input
+                            type="text"
+                            placeholder="Search transcript..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            style={{
+                              width: '100%',
+                              background: '#020617',
+                              border: '1px solid #1e293b',
+                              borderRadius: '6px',
+                              padding: '6px 10px',
+                              fontSize: '12px',
+                              color: 'white',
+                              outline: 'none',
+                              marginBottom: '6px'
+                            }}
+                          />
+                        </div>
+
                         {/* Transcript Segments List */}
                         <div className="flex flex-col gap-2">
                           {result?.transcript && result.transcript.length > 0 ? (
-                            result.transcript.map((seg, index) => {
-                              const isEditing = editingSegmentIndex === index;
+                            (() => {
+                              const filtered = searchTerm
+                                ? result.transcript.map((s, i) => ({ ...s, originalIndex: i })).filter(seg => seg.text.toLowerCase().includes(searchTerm.toLowerCase()))
+                                : result.transcript.map((s, i) => ({ ...s, originalIndex: i }));
                               
-                              if (isEditing) {
+                              if (filtered.length === 0) {
                                 return (
-                                  <div key={index} className="p-3 rounded-lg bg-slate-900 border border-indigo-500 flex flex-col gap-2">
-                                    <div className="flex justify-between items-center">
-                                      <span className="text-[10px] font-mono font-bold text-indigo-400">
-                                        Segment {formatTime(seg.start)} – {formatTime(seg.end)}
-                                      </span>
-                                    </div>
-                                    <textarea
-                                      value={editSegmentText}
-                                      onChange={(e) => setEditSegmentText(e.target.value)}
-                                      rows="2"
-                                      className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 resize-none"
-                                    />
-                                    <div className="flex justify-end gap-1.5">
-                                      <button
-                                        onClick={() => setEditingSegmentIndex(null)}
-                                        className="text-[10px] px-2 py-1 border border-slate-800 bg-slate-950 rounded hover:bg-slate-850 text-slate-400"
-                                      >
-                                        Cancel
-                                      </button>
-                                      <button
-                                        onClick={() => saveSegmentEdit(index)}
-                                        className="text-[10px] px-2 py-1 bg-indigo-600 rounded hover:bg-indigo-700 text-white"
-                                      >
-                                        Save
-                                      </button>
-                                    </div>
+                                  <div className="p-8 text-center text-xs text-slate-500">
+                                    No matching segments found.
                                   </div>
                                 );
                               }
 
-                              return (
-                                <div
-                                  key={index}
-                                  className="group flex gap-2.5 items-start p-2 rounded-lg hover:bg-slate-900/60 transition-colors text-left"
-                                >
-                                  {/* Seek timestamp trigger */}
-                                  <button
-                                    onClick={() => playChapter({ start_time: seg.start })}
-                                    className="text-[10px] font-mono font-bold text-indigo-400 hover:text-indigo-300 bg-slate-950 border border-slate-900 px-1.5 py-0.5 rounded shrink-0 mt-0.5"
-                                  >
-                                    {formatTime(seg.start)}
-                                  </button>
-                                  
-                                  {/* Interactive content text click to seek too */}
-                                  <p 
-                                    onClick={() => playChapter({ start_time: seg.start })}
-                                    className="text-xs text-slate-350 hover:text-white cursor-pointer leading-relaxed flex-1 font-sans"
-                                  >
-                                    {seg.text}
-                                  </p>
+                              return filtered.map((seg) => {
+                                const index = seg.originalIndex;
+                                const isEditing = editingSegmentIndex === index;
+                                
+                                if (isEditing) {
+                                  return (
+                                    <div key={index} className="p-3 rounded-lg bg-slate-900 border border-indigo-500 flex flex-col gap-2">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-mono font-bold text-indigo-400">
+                                          Segment {formatTime(seg.start)} – {formatTime(seg.end)}
+                                        </span>
+                                      </div>
+                                      <textarea
+                                        value={editSegmentText}
+                                        onChange={(e) => setEditSegmentText(e.target.value)}
+                                        rows="2"
+                                        className="w-full bg-slate-950 border border-slate-800 rounded p-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 resize-none"
+                                      />
+                                      <div className="flex justify-end gap-1.5">
+                                        <button
+                                          onClick={() => setEditingSegmentIndex(null)}
+                                          className="text-[10px] px-2 py-1 border border-slate-800 bg-slate-950 rounded hover:bg-slate-850 text-slate-400"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          onClick={() => saveSegmentEdit(index)}
+                                          className="text-[10px] px-2 py-1 bg-indigo-600 rounded hover:bg-indigo-700 text-white"
+                                        >
+                                          Save
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                }
 
-                                  {/* Edit button */}
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      startEditSegment(index, seg);
-                                    }}
-                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-slate-500 hover:text-white rounded hover:bg-slate-800"
-                                    title="Edit Transcript Text"
+                                return (
+                                  <div
+                                    key={index}
+                                    className="group flex gap-2.5 items-start p-2 rounded-lg hover:bg-slate-900/60 transition-colors text-left"
                                   >
-                                    <Edit2 className="h-3 w-3" />
-                                  </button>
-                                </div>
-                              );
-                            })
+                                    {/* Seek timestamp trigger */}
+                                    <button
+                                      onClick={() => playChapter({ start_time: seg.start })}
+                                      className="text-[10px] font-mono font-bold text-indigo-400 hover:text-indigo-300 bg-slate-950 border border-slate-900 px-1.5 py-0.5 rounded shrink-0 mt-0.5"
+                                    >
+                                      {formatTime(seg.start)}
+                                    </button>
+                                    
+                                    {/* Interactive content text click to seek too */}
+                                    <p 
+                                      onClick={() => playChapter({ start_time: seg.start })}
+                                      className="text-xs text-slate-355 hover:text-white cursor-pointer leading-relaxed flex-1 font-sans"
+                                    >
+                                      {highlightText(seg.text, searchTerm)}
+                                    </p>
+
+                                    {/* Edit button */}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        startEditSegment(index, seg);
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 text-slate-500 hover:text-white rounded hover:bg-slate-800"
+                                      title="Edit Transcript Text"
+                                    >
+                                      <Edit2 className="h-3 w-3" />
+                                    </button>
+                                  </div>
+                                );
+                              });
+                            })()
                           ) : (
                             <div className="p-8 text-center text-xs text-slate-500">
                               Transcript segments are not available.
@@ -1000,10 +1110,27 @@ function App() {
                         {/* High-Level Narrative Summary */}
                         <div className="bg-gradient-to-tr from-indigo-950/40 to-slate-900/60 border border-slate-900 p-5 rounded-2xl relative overflow-hidden shadow-sm">
                           <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-xl" />
-                          <h4 className="font-bold text-xs text-indigo-300 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-                            <Sparkles className="h-3.5 w-3.5 animate-pulse text-indigo-400" />
-                            AI Video Digest
-                          </h4>
+                          <div className="flex justify-between items-center mb-2.5">
+                            <h4 className="font-bold text-xs text-indigo-300 uppercase tracking-wider flex items-center gap-1.5 animate-pulse">
+                              <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                              AI Video Digest
+                            </h4>
+                            <button
+                              onClick={generatePdfReport}
+                              style={{
+                                background: 'rgba(99, 102, 241, 0.2)',
+                                color: '#a5b4fc',
+                                border: '1px solid rgba(99, 102, 241, 0.3)',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontSize: '10px',
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              PDF Report
+                            </button>
+                          </div>
                           <p className="text-xs text-slate-250 leading-relaxed font-sans">
                             {result?.video_summary || "This video has been successfully transcribed and chapters were automatically extracted based on key conceptual shifts and structural changes."}
                           </p>
