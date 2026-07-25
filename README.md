@@ -4,39 +4,31 @@ ClipForge is an enterprise grade video processing tool; it transcribes video fil
 
 ## Interface Screenshots
 
-Here is the visual walkthrough of the application interface; click the dropdowns to expand each view.
+Here is the visual walkthrough of the application interface.
 
-<details>
-<summary><b>1. Video Upload Interface (Click to expand)</b></summary>
+### 1. Video Upload Interface
 
 The upload screen allows dragging and dropping video files or browsing them manually; it supports mp4 and mov formats up to 200MB.
 
 ![Upload Video Interface](images/Upload%20Video.png)
-</details>
 
-<details>
-<summary><b>2. Video Chapters Panel (Click to expand)</b></summary>
+### 2. Video Chapters Panel
 
 The chapters panel lists the generated chapters with timestamps; users can add new chapters; edit chapter title; start time; end time; summary; and tags; or delete chapters.
 
 ![Chapters Panel](images/Chapters.png)
-</details>
 
-<details>
-<summary><b>3. Interactive Transcript Panel (Click to expand)</b></summary>
+### 3. Interactive Transcript Panel
 
 The transcript panel displays timestamped segments; clicking a segment seeks the video to that moment; users can edit the transcript inline; and export to SRT; VTT; YouTube Chapters; or XML.
 
 ![Transcript Panel](images/Transcript.png)
-</details>
 
-<details>
-<summary><b>4. AI Summary Panel (Click to expand)</b></summary>
+### 4. AI Summary Panel
 
 The summary panel presents a narrative summary; interactive Q&A accordion cards; and a keyword cloud to filter chapters by topic.
 
 ![AI Summary Panel](images/AI%20Summary.png)
-</details>
 
 ## Project Architecture
 
