@@ -22,7 +22,7 @@ The chapters panel lists the generated chapters with timestamps; users can add n
 
 The transcript panel displays timestamped segments; clicking a segment seeks the video to that moment; users can edit the transcript inline; and export to SRT; VTT; YouTube Chapters; or XML.
 
-![Transcript Panel](images/Transcript.png)
+![Transcript Panel](images/Transcript%20copy.png)
 
 ### 4. AI Summary Panel
 
