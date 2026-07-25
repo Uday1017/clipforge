@@ -57,7 +57,9 @@ def _generate_fallback_chapters(transcript: List[TranscriptSegment], video_id: s
     return ChapterGenerationResponse(
         video_id=video_id,
         total_duration=round(total_duration, 2),
-        chapters=chapters
+        chapters=chapters,
+        transcript=transcript,
+        video_summary="Heuristic fallback summary: The video has been partitioned based on duration thresholds because LLM integration was bypassed."
     )
 
 def _generate_via_gemini(transcript_text: str, video_id: str, total_duration: float) -> ChapterGenerationResponse:
@@ -75,6 +77,7 @@ def _generate_via_gemini(transcript_text: str, video_id: str, total_duration: fl
     {transcript_text}
     
     Please analyze it and generate structured chapters for video ID: {video_id} with total duration: {total_duration}s.
+    Also generate a comprehensive high-level summary of what the entire video is about (populate the 'video_summary' field).
     """
     
     response = client.models.generate_content(
@@ -91,7 +94,8 @@ def _generate_via_gemini(transcript_text: str, video_id: str, total_duration: fl
                 "Titles must be highly engaging, explicit, and descriptive (max 6 words), describing exactly what is discussed "
                 "(e.g., 'Introduction: Greeting the Audience', 'Core Argument: Why 18-Minute Talks Fail', 'Summary & Final Remarks'). "
                 "Provide a 1-2 sentence concise summary and 3-5 tags (keywords) for each chapter. "
-                "Ensure start_time and end_time match the original transcript seconds exactly."
+                "Ensure start_time and end_time match the original transcript seconds exactly. "
+                "Finally, provide a comprehensive high-level summary of what the entire video is about in the 'video_summary' field."
             ),
             response_mime_type="application/json",
             response_schema=ChapterGenerationResponse,
@@ -120,6 +124,7 @@ async def _generate_via_groq(transcript_text: str, video_id: str, total_duration
     {{
         "video_id": "{video_id}",
         "total_duration": {total_duration},
+        "video_summary": "string (comprehensive high-level summary of the entire video)",
         "chapters": [
             {{
                 "start_time": float,
@@ -147,6 +152,7 @@ async def _generate_via_groq(transcript_text: str, video_id: str, total_duration
                     "(e.g., 'Introduction: Greeting the Audience', 'Core Argument: Why 18-Minute Talks Fail', 'Summary & Final Remarks'). "
                     "Provide a 1-2 sentence concise summary and 3-5 tags (keywords) for each chapter. "
                     "Ensure start_time and end_time match the original transcript seconds exactly. "
+                    "Provide a comprehensive summary of what the entire video is about in 'video_summary'. "
                     "Output ONLY valid JSON matching the requested schema."
                 ),
             },
@@ -196,6 +202,7 @@ async def generate_chapters_from_transcript(transcript: List[TranscriptSegment],
         try:
             # Offload the blocking Gemini client execution to a background thread
             result = await asyncio.to_thread(_generate_via_gemini, transcript_text, video_id, total_duration)
+            result.transcript = transcript
             logger.info("Successfully generated chapters using Gemini API.")
             return result
         except Exception as e:
@@ -205,6 +212,7 @@ async def generate_chapters_from_transcript(transcript: List[TranscriptSegment],
     if settings.GROQ_API_KEY:
         try:
             result = await _generate_via_groq(transcript_text, video_id, total_duration)
+            result.transcript = transcript
             logger.info("Successfully generated chapters using Groq API.")
             return result
         except Exception as e:
@@ -212,4 +220,6 @@ async def generate_chapters_from_transcript(transcript: List[TranscriptSegment],
             
     # 3. Fallback heuristic generator if LLM paths failed or are not configured
     logger.warning("All LLM paths failed or were not configured. Invoking heuristic fallback chapter generator.")
-    return _generate_fallback_chapters(transcript, video_id)
+    result = _generate_fallback_chapters(transcript, video_id)
+    result.transcript = transcript
+    return result

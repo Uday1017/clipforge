@@ -27,6 +27,9 @@ class ChapterGenerationResponse(BaseModel):
     video_id: str = Field(..., description="Unique identifier of the video")
     total_duration: float = Field(..., description="Total duration of the video in seconds")
     chapters: List[VideoChapter] = Field(..., description="List of generated video chapters")
+    transcript: Optional[List[TranscriptSegment]] = Field(default=None, description="List of raw transcript segments")
+    video_summary: Optional[str] = Field(default=None, description="A comprehensive high-level summary of what the entire video is about")
+
 
 class JobStatusResponse(BaseModel):
     """
